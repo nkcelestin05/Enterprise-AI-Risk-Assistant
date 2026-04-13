@@ -1,0 +1,69 @@
+# =============================================================================
+# Enterprise AI Risk Assessment Assistant - Local Development Environment
+# Usage: docker-compose up -d
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: risk-assistant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: risk_assistant
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/risk_assistant
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+        NEXTAUTH_URL: http://localhost:3000
+        ABACUSAI_API_KEY: ${ABACUSAI_API_KEY}
+    container_name: risk-assistant-app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/risk_assistant
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: http://localhost:3000
+      ABACUSAI_API_KEY: ${ABACUSAI_API_KEY}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Database Admin UI (optional - for development)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: risk-assistant-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@riskassistant.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+    profiles:
+      - dev-tools
+
+volumes:
+  postgres_data:
+    driver: local
